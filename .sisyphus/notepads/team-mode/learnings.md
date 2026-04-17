@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # team-mode notepad — learnings
 
 ## Reference Projects (MANDATORY for all implementers)
@@ -98,3 +99,9 @@ src/cli/doctor/checks/team-mode.ts
 ## Task 5
 - Hephaestus tool permissions live in the same cluster as Atlas, Sisyphus, Prometheus, and Sisyphus-Junior.
 - The surgical assertion belongs in the existing tool-config-handler test file, using the existing agentResult helper.
+
+## 2026-04-18 Task 2: types module
+
+- `MemberSchema` needs `.strict()` on the base shape so the discriminatedUnion rejects members that mix `category` and `subagent_type`.
+- `backendType` and `isActive` defaults are part of the schema contract, so tests should use `toMatchObject` instead of exact object equality.
+- The eligibility registry must preserve the plan strings verbatim, especially the hard-reject messages for Momus verification.
