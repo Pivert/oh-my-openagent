@@ -1,22 +1,18 @@
+/// <reference types="bun-types" />
+
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 
-const spawnMock = mock(() => ({
-  exited: Promise.resolve(0),
-  stdout: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode("%1\n")); controller.close() } }),
-  stderr: new ReadableStream({ start(controller) { controller.close() } }),
-}))
+const runTmuxCommandMock = mock(() => Promise.resolve({ success: true, output: "%1" }))
 
-mock.module("bun", () => ({ spawn: spawnMock }))
-
+mock.module("./tmux-runner", () => ({ runTmuxCommand: runTmuxCommandMock }))
 mock.module("../../../tools/interactive-bash/tmux-path-resolver", () => ({ getTmuxPath: mock(() => Promise.resolve("tmux")) }))
-
 mock.module("../../../shared", () => ({ log: mock(() => undefined) }))
 
-import { createTeamLayout, removeTeamLayout, canVisualize } from "./layout"
+import { canVisualize, createTeamLayout, removeTeamLayout } from "./layout"
 
 describe("team-layout-tmux", () => {
   beforeEach(() => {
-    spawnMock.mockClear()
+    runTmuxCommandMock.mockClear()
     process.env.TMUX = "/tmp/tmux-1"
   })
 
@@ -30,7 +26,7 @@ describe("team-layout-tmux", () => {
     // then
     expect(canVisualize()).toBe(false)
     expect(result).toBeNull()
-    expect(spawnMock).toHaveBeenCalledTimes(0)
+    expect(runTmuxCommandMock).toHaveBeenCalledTimes(0)
   })
 
   test("creates focus and grid windows", async () => {
@@ -45,20 +41,17 @@ describe("team-layout-tmux", () => {
     await createTeamLayout("run-2", members, {} as never)
 
     // then
-    expect(spawnMock.mock.calls.flatMap((call) => call[0] as Array<string>)).toContain("new-session")
-    expect(spawnMock.mock.calls.flatMap((call) => call[0] as Array<string>)).toContain("new-window")
-    expect(spawnMock.mock.calls.flatMap((call) => call[0] as Array<string>)).toContain("split-window")
-    expect(spawnMock.mock.calls.flatMap((call) => call[0] as Array<string>)).toContain("select-layout")
-    expect(spawnMock.mock.calls.flatMap((call) => call[0] as Array<string>)).toContain("select-pane")
+    const commands = (runTmuxCommandMock.mock.calls as unknown as Array<[string, Array<string>]>).map((call) => call[1])
+    expect(commands.flat()).toContain("new-session")
+    expect(commands.flat()).toContain("new-window")
+    expect(commands.flat()).toContain("split-window")
+    expect(commands.flat()).toContain("select-layout")
+    expect(commands.flat()).toContain("select-pane")
   })
 
   test("returns null when tmux command fails", async () => {
     // given
-    spawnMock.mockImplementationOnce(() => ({
-      exited: Promise.resolve(1),
-      stdout: new ReadableStream({ start(controller) { controller.close() } }),
-      stderr: new ReadableStream({ start(controller) { controller.close() } }),
-    }))
+    runTmuxCommandMock.mockImplementationOnce(() => Promise.resolve({ success: false, output: "" }))
 
     // when
     const result = await createTeamLayout("run-3", [{ name: "lead", sessionId: "s1" }], {} as never)
@@ -73,6 +66,7 @@ describe("team-layout-tmux", () => {
     await removeTeamLayout("run-4", {} as never)
 
     // then
-    expect(spawnMock.mock.calls.some((call) => (call[0] as Array<string>).includes("kill-session"))).toBe(true)
+    const commands = (runTmuxCommandMock.mock.calls as unknown as Array<[string, Array<string>]>).map((call) => call[1]).flat()
+    expect(commands).toContain("kill-session")
   })
 })
